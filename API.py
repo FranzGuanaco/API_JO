@@ -160,8 +160,8 @@ def get_offers():
     except Exception as e:
         print(f"Erreur lors de la récupération des offres: {e}")
         return jsonify({"status": "error", "message": "Erreur interne du serveur"}), 500
-    
-     
+
+
 
 @app.route('/payment', methods=['POST'])
 def process_payment():
@@ -221,6 +221,12 @@ def process_payment():
         img.save(buffered, format="PNG")
         qr_code_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
+        # Insérer le e-ticket dans la table e_ticket
+        cur.execute(
+            "INSERT INTO e_ticket (utilisateur_id, commande_id, clef_finale, qr_code) VALUES (%s, %s, %s, %s)",
+            (utilisateur_id, commande_id, clef_commande_finale, qr_code_image)
+        )
+
         conn.commit()
         cur.close()
 
@@ -234,6 +240,143 @@ def process_payment():
     except Exception as e:
         conn.rollback()
         print(f"Erreur lors du traitement du paiement: {e}")
+        return jsonify({"status": "error", "message": "Erreur interne du serveur"}), 500
+    
+
+
+@app.route('/admin/offers', methods=['GET'])
+def get_admin_offers():
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT id, nom, description, prix, nombre_personnes FROM offre")
+        offers = cur.fetchall()
+        cur.close()
+
+        offers_list = []
+        for offer in offers:
+            offers_list.append({
+                "id": offer[0],
+                "name": offer[1],
+                "description": offer[2],
+                "prix": offer[3],
+                "capacity": offer[4]
+            })
+
+        return jsonify({"status": "success", "offers": offers_list}), 200
+
+    except Exception as e:
+        print(f"Erreur lors de la récupération des offres: {e}")
+        return jsonify({"status": "error", "message": "Erreur interne du serveur"}), 500
+
+
+
+@app.route('/admin/offers', methods=['POST'])
+def create_offer():
+    data = request.json
+    nom = data.get('name')
+    description = data.get('description')
+    prix = data.get('prix')
+    nombre_personnes = data.get('capacity')
+
+    try:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO offre (nom, description, prix, nombre_personnes) VALUES (%s, %s, %s, %s) RETURNING id", 
+                    (nom, description, prix, nombre_personnes))
+        offer_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+
+        return jsonify({"status": "success", "message": "Offre créée avec succès", "id": offer_id}), 201
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Erreur lors de la création de l'offre: {e}")
+        return jsonify({"status": "error", "message": "Erreur interne du serveur"}), 500
+
+
+@app.route('/admin/offers/<int:id>', methods=['PUT'])
+def update_offer(id):
+    data = request.json
+    nom = data.get('name')
+    description = data.get('description')
+    prix = data.get('prix')
+    nombre_personnes = data.get('capacity')
+
+    try:
+        cur = conn.cursor()
+        cur.execute("UPDATE offre SET nom = %s, description = %s, prix = %s, nombre_personnes = %s WHERE id = %s",
+                    (nom, description, prix, nombre_personnes, id))
+        conn.commit()
+        cur.close()
+
+        return jsonify({"status": "success", "message": "Offre mise à jour avec succès"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Erreur lors de la mise à jour de l'offre: {e}")
+        return jsonify({"status": "error", "message": "Erreur interne du serveur"}), 500
+
+
+@app.route('/admin/offers/<int:id>', methods=['DELETE'])
+def delete_offer(id):
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM offre WHERE id = %s", (id,))
+        conn.commit()
+        cur.close()
+
+        return jsonify({"status": "success", "message": "Offre supprimée avec succès"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        print(f"Erreur lors de la suppression de l'offre: {e}")
+        return jsonify({"status": "error", "message": "Erreur interne du serveur"}), 500
+
+
+@app.route('/admin/commandes', methods=['GET'])
+def get_admin_commandes():
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                c.id AS commande_id,
+                u.id AS utilisateur_id,
+                u.nom AS utilisateur_nom,
+                o.id AS offre_id,
+                o.nom AS offre_nom,
+                co.quantite AS quantite,
+                c.clef_commande
+            FROM
+                commande c
+            JOIN
+                commande_offre co ON c.id = co.commande_id
+            JOIN
+                offre o ON co.offre_id = o.id
+            JOIN
+                utilisateur u ON c.utilisateur_id = u.id
+            ORDER BY
+                c.id;
+        """)
+        rows = cur.fetchall()
+        cur.close()
+
+        # Formater les résultats sous forme de liste de dictionnaires
+        commandes_list = []
+        for row in rows:
+            commandes_list.append({
+                "commande_id": row[0],
+                "utilisateur_id": row[1],
+                "utilisateur_nom": row[2],
+                "offre_id": row[3],
+                "offre_nom": row[4],
+                "quantite": row[5],
+                "clef_commande": row[6]
+            })
+
+        return jsonify({"status": "success", "commandes": commandes_list}), 200
+
+    except Exception as e:
+        print(f"Erreur lors de la récupération des commandes: {e}")
         return jsonify({"status": "error", "message": "Erreur interne du serveur"}), 500
 
 
