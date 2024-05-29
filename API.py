@@ -9,10 +9,10 @@ from io import BytesIO
 import base64
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+CORS(app, resources={r"/*": {"origins": "*"}})  # Update origins as needed
 
 # Configuration de la connexion à la base de données PostgreSQL
-DATABASE_URL = os.getenv('DATABASE_URL', "dbname='jeux_olympiques' user='pierrechevin' host='localhost' password='Elsalvador60?' port='5432'")
+DATABASE_URL = os.getenv('DATABASE_URL', "postgres://postgres:Elsalvador60?@jeuxolympiques.internal:5432/jeux_olympiques")
 
 try:
     conn = psycopg2.connect(DATABASE_URL)
@@ -382,7 +382,7 @@ def get_admin_commandes():
 
 
 if __name__ == '__main__':
-    app.run(port=3002)
+        app.run(host='0.0.0.0', port=8080)
 
 
 
